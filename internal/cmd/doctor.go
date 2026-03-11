@@ -44,6 +44,8 @@ Infrastructure checks:
   - stale-binary             Check if gt binary is up to date with repo
   - beads-binary             Check that beads (bd) is installed and meets minimum version
   - daemon                   Check if daemon is running (fixable)
+  - tmux-global-env          Verify GT_TOWN_ROOT is set in tmux global environment (fixable)
+  - tmux-binding-state       Validate tmux cycle bindings are current (fixable)
   - boot-health              Check Boot watchdog health (vet mode)
   - town-beads-config        Verify town .beads/config.yaml exists (fixable)
 
@@ -172,6 +174,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	d.Register(doctor.NewClaudeSettingsCheck())
 	d.Register(doctor.NewDaemonCheck())
 	d.Register(doctor.NewTmuxGlobalEnvCheck())
+	d.Register(doctor.NewTmuxBindingStateCheck())
 	d.Register(doctor.NewBootHealthCheck())
 	d.Register(doctor.NewTownBeadsConfigCheck())
 	d.Register(doctor.NewCustomTypesCheck())
