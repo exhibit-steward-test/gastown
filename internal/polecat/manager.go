@@ -373,6 +373,21 @@ func (m *Manager) agentBeadID(name string) string {
 	return beads.PolecatBeadIDWithPrefix(prefix, m.rig.Name, name)
 }
 
+// logPolecatLifecycle emits a lifecycle event to the beads audit ledger.
+// This provides a structured timeline of polecat spawn, state changes, and removal
+// for post-mortem analysis and debugging. Non-fatal errors are logged but don't fail the operation.
+func (m *Manager) logPolecatLifecycle(entry beads.PolecatLifecycleEntry) {
+	if m.beads == nil {
+		return // Beads not available in this context
+	}
+	_ = m.beads.LogPolecatLifecycle(entry)
+}
+
+// currentTimestamp returns the current time in RFC3339 format for audit entries.
+func currentTimestamp() string {
+	return time.Now().UTC().Format(time.RFC3339)
+}
+
 // getCleanupStatusFromBead reads the cleanup_status from the polecat's agent bead.
 // Returns CleanupUnknown if the bead doesn't exist or has no cleanup_status.
 // ZFC #10: This is the ZFC-compliant way to check if removal is safe.
@@ -688,7 +703,21 @@ func (m *Manager) AllocateAndAdd(opts AddOptions) (string, *Polecat, error) {
 // (worktree, beads, settings) after the directory has been created.
 // Caller MUST hold the polecat lock and have already created polecatDir.
 func (m *Manager) addWithOptionsLocked(name string, opts AddOptions, polecatDir string) (_ *Polecat, retErr error) {
-	defer func() { telemetry.RecordPolecatSpawn(context.Background(), name, retErr) }()
+	defer func() {
+		telemetry.RecordPolecatSpawn(context.Background(), name, retErr)
+		// Log spawn failure to beads audit ledger
+		if retErr != nil {
+			agentID := m.agentBeadID(name)
+			m.logPolecatLifecycle(beads.PolecatLifecycleEntry{
+				Timestamp:   currentTimestamp(),
+				Event:       "failure",
+				PolecatName: name,
+				AgentBeadID: agentID,
+				State:       "spawn_failed",
+				Error:       retErr.Error(),
+			})
+		}
+	}()
 
 	clonePath := filepath.Join(polecatDir, m.rig.Name)
 	branchName := m.buildBranchName(name, opts.HookBead)
@@ -790,6 +819,18 @@ func (m *Manager) addWithOptionsLocked(name string, opts AddOptions, polecatDir 
 		cleanupOnError()
 		return nil, fmt.Errorf("agent bead required for polecat tracking: %w", err)
 	}
+
+	// Log successful spawn to beads audit ledger
+	m.logPolecatLifecycle(beads.PolecatLifecycleEntry{
+		Timestamp:   currentTimestamp(),
+		Event:       "spawn",
+		PolecatName: name,
+		AgentBeadID: agentID,
+		State:       "spawning",
+		Branch:      branchName,
+		BaseBranch:  startPoint,
+		HookBead:    opts.HookBead,
+	})
 
 	now := time.Now()
 	polecat := &Polecat{
@@ -1177,6 +1218,15 @@ func (m *Manager) RemoveWithOptions(name string, force, nuclear, selfNuke bool) 
 	// Release name back to pool if it's a pooled name (non-fatal: state file update)
 	m.namePool.Release(name)
 	_ = m.namePool.Save()
+
+	// Log successful removal to beads audit ledger
+	m.logPolecatLifecycle(beads.PolecatLifecycleEntry{
+		Timestamp:   currentTimestamp(),
+		Event:       "remove",
+		PolecatName: name,
+		AgentBeadID: agentID,
+		Reason:      "polecat removed",
+	})
 
 	return nil
 }
@@ -1868,7 +1918,30 @@ func (m *Manager) Get(name string) (*Polecat, error) {
 // Valid states: "spawning", "working", "done", "stuck", "idle"
 func (m *Manager) SetAgentState(name string, state string) error {
 	agentID := m.agentBeadID(name)
-	return m.beads.UpdateAgentState(agentID, state)
+
+	// Get current state before updating (for audit trail)
+	var priorState string
+	if _, fields, err := m.beads.GetAgentBead(agentID); err == nil && fields != nil {
+		priorState = fields.AgentState
+	}
+
+	if err := m.beads.UpdateAgentState(agentID, state); err != nil {
+		return err
+	}
+
+	// Log state change to beads audit ledger (only if state actually changed)
+	if priorState != state {
+		m.logPolecatLifecycle(beads.PolecatLifecycleEntry{
+			Timestamp:   currentTimestamp(),
+			Event:       "state_change",
+			PolecatName: name,
+			AgentBeadID: agentID,
+			State:       state,
+			PriorState:  priorState,
+		})
+	}
+
+	return nil
 }
 
 // - StateDone: assignee cleared from issue (polecat ready for cleanup)
