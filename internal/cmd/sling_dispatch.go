@@ -322,10 +322,7 @@ func executeSling(params SlingParams) (*SlingResult, error) {
 	actor := detectActor()
 	_ = events.LogFeed(events.TypeSling, actor, events.SlingPayload(beadToHook, targetAgent))
 
-	// 9. Update agent hook_bead state
-	updateAgentHookBead(targetAgent, beadToHook, hookWorkDir, beadsDir)
-
-	// 10. Store fields in bead (dispatcher, args, attached_molecule, no_merge, mode)
+	// 9. Store fields in bead (dispatcher, args, attached_molecule, no_merge, mode)
 	fieldUpdates := beadFieldUpdates{
 		Dispatcher:       actor,
 		Args:             params.Args,

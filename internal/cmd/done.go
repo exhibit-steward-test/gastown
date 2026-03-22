@@ -1237,8 +1237,6 @@ func updateAgentStateOnDone(cwd, townRoot, exitType, issueID string) {
 		}
 	}
 
-	// No ClearHookBead call needed — agent bead hook slot is no longer maintained (hq-l6mm5).
-
 	// Self-managed completion (gt-1qlg, polecat-self-managed-completion.md Phase 2):
 	// Polecat sets agent_state=idle directly, skipping the intermediate "done" state.
 	// The witness is no longer in the critical path for routine completions.

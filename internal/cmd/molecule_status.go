@@ -372,9 +372,7 @@ func runMoleculeStatus(cmd *cobra.Command, args []string) error {
 	var hookBead *beads.Issue
 
 	if agentBeadID != "" {
-		// Resolve the correct beads directory for the agent bead using prefix-based
-		// routing. This matches how updateAgentHookBead resolves the directory when
-		// setting the hook (via beads.ResolveHookDir).
+		// Resolve the correct beads directory for the agent bead using prefix-based routing.
 		agentBeadPath := beads.ResolveHookDir(townRoot, agentBeadID, workDir)
 		agentB := b
 		if agentBeadPath != workDir {

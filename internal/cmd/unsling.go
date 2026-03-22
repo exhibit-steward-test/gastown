@@ -214,8 +214,6 @@ func runUnslingWith(cmd *cobra.Command, args []string, dryRun, force bool) error
 		return nil
 	}
 
-	// No ClearHookBead call needed — agent bead hook slot is no longer maintained (hq-l6mm5).
-
 	// Update hooked bead status from "hooked" back to "open".
 	// Previously, only the agent's hook slot was cleared but the bead itself stayed
 	// in "hooked" status forever. Now we update the bead to match the documented
