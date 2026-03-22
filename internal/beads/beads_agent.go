@@ -432,10 +432,6 @@ func (b *Beads) UpdateAgentState(id string, state string) (retErr error) {
 	return nil
 }
 
-// SetHookBead and ClearHookBead removed (hq-l6mm5).
-// Hook slot on agent beads is no longer maintained. Work bead status=hooked
-// and assignee=<agent> is the authoritative source for hook tracking.
-
 // AgentFieldUpdates specifies which agent description fields to update.
 // Only non-nil fields are modified; nil fields are left unchanged.
 // This allows multiple fields to be updated in a single read-modify-write
