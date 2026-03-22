@@ -499,7 +499,7 @@ func (m *Manager) exists(name string) bool {
 
 // AddOptions configures polecat creation.
 type AddOptions struct {
-	HookBead   string // Bead ID to set as hook_bead at spawn time (atomic assignment)
+	HookBead   string // Bead ID to set during agent bead creation (write-once, not actively maintained)
 	BaseBranch string // Override base branch for worktree (e.g., "origin/integration/gt-epic")
 }
 
