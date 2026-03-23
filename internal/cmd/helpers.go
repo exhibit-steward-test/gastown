@@ -17,6 +17,8 @@ import (
 )
 
 // inferRigFromCwd tries to determine the rig from the current directory.
+// The inferred rig name is validated to ensure it exists and is a legitimate rig.
+// This prevents accepting malformed or non-existent rig names from filesystem paths.
 func inferRigFromCwd(townRoot string) (string, error) {
 	cwd, err := filepath.Abs(".")
 	if err != nil {
@@ -34,7 +36,13 @@ func inferRigFromCwd(townRoot string) (string, error) {
 	parts := strings.Split(rel, "/")
 
 	if len(parts) > 0 && parts[0] != "" && parts[0] != "." {
-		return parts[0], nil
+		candidateRig := parts[0]
+		// Validate the inferred rig name before returning it.
+		// This prevents inferring "mayor", ".beads", or non-existent directories as rigs.
+		if err := rig.ValidateRigName(townRoot, candidateRig); err != nil {
+			return "", fmt.Errorf("inferred rig %q is invalid: %w", candidateRig, err)
+		}
+		return candidateRig, nil
 	}
 
 	return "", fmt.Errorf("could not infer rig from current directory")
