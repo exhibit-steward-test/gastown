@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/gastown/internal/config"
 	"github.com/steveyegge/gastown/internal/constants"
+	rigpkg "github.com/steveyegge/gastown/internal/rig"
 	"github.com/steveyegge/gastown/internal/session"
 	"github.com/steveyegge/gastown/internal/tmux"
 	"github.com/steveyegge/gastown/internal/workspace"
@@ -223,28 +224,41 @@ func runThemeApply(cmd *cobra.Command, args []string) error {
 }
 
 // detectCurrentRig determines the rig from environment or cwd.
+// When GT_RIG is set, it MUST be valid - this is a fail-closed security check
+// to prevent agent identity spoofing via malicious GT_RIG values.
 func detectCurrentRig() string {
+	townRoot, err := workspace.FindFromCwd()
+	if err != nil || townRoot == "" {
+		return ""
+	}
+
 	// Try environment first (GT_RIG is set in tmux sessions)
+	// SECURITY: When GT_RIG is explicitly set, validate it before trusting it.
+	// An invalid GT_RIG means someone is trying to spoof agent identity.
 	if rig := os.Getenv("GT_RIG"); rig != "" {
+		if err := rigpkg.ValidateRigName(townRoot, rig); err != nil {
+			// Fail closed: reject invalid GT_RIG rather than falling back to cwd.
+			// This prevents an attacker from setting GT_RIG to an invalid value
+			// and having the system silently accept a cwd-derived fallback.
+			fmt.Fprintf(os.Stderr, "Warning: GT_RIG=%q is invalid: %v\n", rig, err)
+			return ""
+		}
 		return rig
 	}
 
 	// Try to extract from tmux session name
 	if sessName := detectCurrentSession(); sessName != "" {
 		if identity, err := session.ParseSessionName(sessName); err == nil && identity.Rig != "" {
-			return identity.Rig
+			// Validate rig name from session before trusting it
+			if err := rigpkg.ValidateRigName(townRoot, identity.Rig); err == nil {
+				return identity.Rig
+			}
 		}
 	}
 
 	// Try to detect from actual cwd path
 	cwd, err := os.Getwd()
 	if err != nil {
-		return ""
-	}
-
-	// Find town root to extract rig name
-	townRoot, err := workspace.FindFromCwd()
-	if err != nil || townRoot == "" {
 		return ""
 	}
 
@@ -258,7 +272,10 @@ func detectCurrentRig() string {
 	// Patterns: <rig>/..., mayor/..., deacon/...
 	parts := strings.Split(rel, string(filepath.Separator))
 	if len(parts) > 0 && parts[0] != "." && parts[0] != constants.RoleMayor && parts[0] != constants.RoleDeacon {
-		return parts[0]
+		// Validate cwd-derived rig name before returning it
+		if err := rigpkg.ValidateRigName(townRoot, parts[0]); err == nil {
+			return parts[0]
+		}
 	}
 
 	return ""
